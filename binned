@@ -1,0 +1,133 @@
+'''
+created on 5 Aug 2015 by es2y14
+
+NOTE: This script only works from optical minus NIR, and can be altered to NIR minus Optical, for optical minus optical please use the script 'cols_resids.py'. There is no script for NIR minus NIR. 
+
+*also finds residuals
+'''
+
+import os
+import snpy #import SNooPy
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib.patches as mpatches
+
+#loads in scripts that contain the data sample
+os.system("python /home/es2y14/scripts/read_CSPV_sn.py")
+os.system("python /home/es2y14/scripts/read_CSPW_sn.py")
+os.system("python /home/es2y14/scripts/read_CSPX_sn.py")
+os.system("python /home/es2y14/scripts/read_CSPY_sn.py")
+
+
+#runs the scripts that contain the data sample
+execfile("/home/es2y14/scripts/read_CSPV_sn.py")
+execfile("/home/es2y14/scripts/read_CSPW_sn.py")
+execfile("/home/es2y14/scripts/read_CSPX_sn.py")
+execfile("/home/es2y14/scripts/read_CSPY_sn.py")
+
+fig, (ax,ax1) = plt.subplots(2)
+s = snpy.get_sn('/home/es2y14/snpyfiles/snpyfits/SN2004eo') #loads SNooPy fit for SN2004eo (our model SN)
+a = data_OPT1['2004eo']['jd']-s.Tmax #Julian data - time of max Mag
+b = data_OPT1['2004eo']['V'] #parameter to change: choose from B,V,g,i,r,u  <====> FILTER 1 e.g. u
+c = data_NIR1['2004eo']['jd']-s.Tmax #Julian data - time of max Mag
+d = data_NIR1['2004eo']['j'] #parameter to change: choose from y,j,h,k   <====> FILTER 2 e.g. j
+idx = np.isfinite(a) & np.isfinite(b) #sorts out any problems with 'nans'
+z = snpy.polyfit(a[idx],b[idx],5) #fits a polynomial to the first filter and time
+p = snpy.poly1d(z)
+idx_1 = np.isfinite(c) & np.isfinite(d) #sorts out any problems with 'nans'
+y = snpy.polyfit(c[idx_1],d[idx_1],5) #fits a polynomial to the NIR data 
+q = snpy.poly1d(y)
+x = np.arange(60)-20 #create an array of discrete values
+EBV_host = s.parameters['EBVhost'] #define the EBV of the host galaxy
+EBV_mw = s.EBVgal #define the EBV of the galaxy
+A_v = s.Rv_gal*(EBV_host+EBV_mw) #define Av
+extinct_corr = A_v*(1-0.7717422200681183) # <====> EXTINCTION CORRECTION, copy and paste value from txt file
+color = -(d-p(c)) - extinct_corr #corrected colour, includes extinction corrections
+idx_2 = np.isfinite(c) & np.isfinite(color) #sorts out any problems with 'nans'
+model = snpy.polyfit(c[idx_2],color[idx_2],5) #define a model polynomial for the fit
+p_1 = snpy.poly1d(model) 
+model_col = p_1(x) #define the model polynomial at discrete time intervals
+ax.plot(x,model_col,'-',label='2004eo') #plot the model fit
+ax.legend(loc=1,fontsize=9)
+plt.show()
+
+
+s3 = snpy.get_sn('/home/es2y14/snpyfiles/snpyfits/SN2004eo') #gets SNooPy fits for CSP data release 1
+a3 = data_OPT1['2004eo']['jd']-s3.Tmax #is the time since B Maxmimum in optical
+b3 = data_OPT1['2004eo']['V'] #parameter to change: choose from B,V,g,i,r,u  <====> FILTER 1 e.g. u
+c3 = data_NIR1['2004eo']['jd']-s3.Tmax #is the time since B Maxmimum in NIR
+d3 = data_NIR1['2004eo']['j'] #parameter to change: choose from y,j,h,k   <====> FILTER 2 e.g. j
+EBV_host3 = s3.parameters['EBVhost'] #define the EBV of the host galaxy
+EBV_mw3 = s3.EBVgal #define the EBV of the galaxy
+A_v3 = s3.Rv_gal*(EBV_host3+EBV_mw3) #define Av
+extinct_corr3 = A_v3*(1-0.7717422200681183) # <====> EXTINCTION CORRECTION, copy and paste value from txt file
+idx3 = np.isfinite(a3) & np.isfinite(b3) #sorts out any problems with 'nans'
+z3 = snpy.polyfit(a3[idx3],b3[idx3],5) #fits a polynomial to the first filter and time
+p3 = snpy.poly1d(z3)
+idx3_1 = np.isfinite(c3) & np.isfinite(d3) #sorts out any problems with 'nans'
+y3 = snpy.polyfit(c3[idx3_1],d3[idx3_1],5) #fits a polynomial to the NIR data 
+q3 = snpy.poly1d(y3)
+color3 = -(d3-p3(c3)) - extinct_corr3 #corrected colour, includes extinction corrections
+model_col3 = p_1(c3) #define the model polynomial with data points
+ax.plot(c3,model_col3,'v',label='2004eo') #plot the data as a function of the model polynomial
+ax1.plot(c3, model_col3- color3,'v',label='2004eo') #plots the residuals on a seperate graph
+ax.legend(loc=1,fontsize=9)
+ax1.legend(loc=1,fontsize=9)
+#compare model with other supernovae
+for i in data_OPT1.keys():   
+    s1 = snpy.get_sn('/home/es2y14/snpyfiles/snpyfits/SN'+i) #gets SNooPy fits for CSP data release 1
+    a1 = data_OPT1[i]['jd']-s1.Tmax #is the time since B Maxmimum in optical
+    b1 = data_OPT1[i]['V'] #parameter to change: choose from B,V,g,i,r,u  <====> FILTER 1 e.g. u
+    c1 = data_NIR1[i]['jd']-s1.Tmax #is the time since B Maxmimum in NIR
+    d1 = data_NIR1[i]['j'] #parameter to change: choose from y,j,h,k   <====> FILTER 2 e.g. j
+    EBV_host1 = s1.parameters['EBVhost'] #define the EBV of the host galaxy
+    EBV_mw1 = s1.EBVgal #define the EBV of the galaxy
+    A_v1 = s1.Rv_gal*(EBV_host1+EBV_mw1) #define Av
+    extinct_corr1 = A_v1*(1-0.7717422200681183) # <====> EXTINCTION CORRECTION, copy and paste value from txt file
+    idx1 = np.isfinite(a1) & np.isfinite(b1) #sorts out any problems with 'nans'
+    z1 = snpy.polyfit(a1[idx1],b1[idx1],5) #fits a polynomial to the first filter and time
+    p1 = snpy.poly1d(z1)
+    idx1_1 = np.isfinite(c1) & np.isfinite(d1) #sorts out any problems with 'nans'
+    y1 = snpy.polyfit(c1[idx1_1],d1[idx1_1],5) #fits a polynomial to the NIR data 
+    q1 = snpy.poly1d(y1)
+    color1 = -(d1-p1(c1)) - extinct_corr1 #corrected colour, includes extinction corrections
+    model_col1 = p_1(c1) #define the model polynomial with data points
+    ax.plot(c1,model_col1,'x',label=i) #plot the data as a function of the model polynomial
+    ax1.plot(c1, model_col1- color1,'x',label=i) #plots the residuals on a seperate graph
+    ax.legend(loc=1,fontsize=9)
+    ax1.legend(loc=1,fontsize=9)
+for i in data_OPT2.keys():   
+    s2 = snpy.get_sn('/home/es2y14/snpyfiles/snpyfits/SN'+i) #gets SNooPy fits for CSP data release 2
+    a2 = data_OPT2[i]['jd']-s2.Tmax # is the time since B Maxmimum in optical
+    b2 = data_OPT2[i]['V'] #parameter to change: choose from B,V,g,i,r,u  <====> FILTER 1 e.g. u
+    c2 = data_NIR2[i]['jd']-s2.Tmax #is the time since B Maxmimum in NIR
+    d2 = data_NIR2[i]['j'] #parameter to change: choose from y,j,h,k   <====> FILTER 2 e.g. j
+    EBV_host2 = s2.parameters['EBVhost'] #define the EBV of the host galaxy
+    EBV_mw2 = s2.EBVgal #define the EBV of the galaxy
+    A_v2 = s2.Rv_gal*(EBV_host2+EBV_mw2) #define Av
+    extinct_corr2 = A_v2*(1-0.7717422200681183)# <====> EXTINCTION CORRECTION, copy and paste value from txt file
+    idx2 = np.isfinite(a2) & np.isfinite(b2) #sorts out any problems with 'nans'
+    z2 = snpy.polyfit(a2[idx2],b2[idx2],5) #fits a polynomial to the first filter and time
+    p2 = snpy.poly1d(z2)
+    idx2_1 = np.isfinite(c2) & np.isfinite(d2) #sorts out any problems with 'nans'
+    y2 = snpy.polyfit(c2[idx2_1],d2[idx2_1],5) #fits a polynomial to the NIR data 
+    q2 = snpy.poly1d(y2)
+    color2 = -(d2-p2(c2)) - extinct_corr2 #corrected colour, includes extinction corrections
+    model_col2 = p_1(c2) #define the model polynomial with data points
+    ax.plot(c2,model_col2,'1',label=i) #plot the data as a function of the model polynomial
+    ax1.plot(c2, model_col2- color2,'1',label=i) #plots the residuals on a seperate graph
+    ax.legend(loc=1,fontsize=9)
+    ax1.legend(loc=1,fontsize=9)
+#plots some stuff
+ax1.axhline(y=0.0, xmin=-20.0,xmax=20.0,c="black") #plots a line of y=0 on residual graph, helps to visualize it better
+ax.set_title('V-J polynomial fit for SN2004eo') #title the first graph
+ax.set_xlabel('Time Since B Maximum (Days)') #x-axis defined
+ax.set_ylabel('Mag') #y-axis defined
+ax.set_xlim((-15.0,10.0)) #set the x-axis range
+ax.set_ylim((0.0,-2.0)) #set the y-axis range
+ax1.set_title('Residuals') #title the second graph
+ax1.set_xlabel('Time Since B Maximum (Days)') #x-axis defined
+ax1.set_ylabel('Polynomial Model fit - actual data points') #y-axis defined
+ax1.set_xlim((-15.0,10.0)) #set the x-axis range
+ax1.set_ylim((1.0,-1.0)) #set the y-axis range
+plt.show() #shows the plot
