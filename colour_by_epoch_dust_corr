@@ -1,0 +1,126 @@
+import os
+import snpy #import SNooPy
+import matplotlib.pyplot as plt
+import numpy as np
+import sys
+import itertools
+
+##Import dictionaries with SNe data
+
+if '/home/es2y14/scripts/' not in sys.path:
+    sys.path.append('/home/es2y14/scripts/')  ##Append Scripts Dir
+
+from read_CSPV_sn import *
+from read_CSPW_sn import *
+from read_CSPX_sn import *
+from read_CSPY_sn import *
+
+from calculate_extinction import calculate_extinction
+
+data_NIR1 = read_CSPV_sn_dict()
+data_NIR2 = read_CSPW_sn_dict()
+data_OPT2 = read_CSPX_sn_dict()
+data_OPT1 = read_CSPY_sn_dict()
+
+
+#gets the polynomial model
+
+s = snpy.get_sn('/home/es2y14/snpyfiles/snpyfits/optical_1/SN2004eo') #Gets the SNooPy fit for our 'template' SN
+epoch = data_OPT1['2004eo']['jd']-s.Tmax #relative time to B maximum
+
+filter_1 = ['u','B','V','g','r','i'] #all possible optical filter that can be used
+perm = list (itertools.permutations(filter_1,2)) #create permuatations of all the filters
+x = np.arange(30) 
+for i in x:
+    band_1 = perm[i][0] ##first band for colour
+    band_2 = perm[i][1] ##second band for colour
+    
+    ## SET UP 2004eo AS 'TEMPLATE'
+    colour = data_OPT1['2004eo'][band_1] - data_OPT1['2004eo'][band_2] #colour without extinction corrections
+
+    # Calculate extinction parameters
+    #EBV_host = s.parameters['EBVhost'] #define the EBV of the host galaxy
+    #EBV_mw = s.EBVgal #define the EBV of the galaxy
+    #A_v = s.Rv_gal*(EBV_host+EBV_mw) #define Av
+    #extinct = A_v*
+
+
+    extinct = (calculate_extinction(band1 = band_1, band2 = band_2, R_v = 3.1, sn = '2004eo'))
+    colour_without_dust = colour - extinct  ##colour with dust reddening corrections
+
+    idx = np.isfinite(epoch) & np.isfinite(colour_without_dust) ##Figures out NaNs
+
+    polynomial = snpy.polyfit(epoch[idx],colour_without_dust[idx],5) ##Fits a polynomial to out template SN
+    polynomial_with_coeff = snpy.poly1d(polynomial) 
+    time_values = np.arange(60)-20 ##Create an array of discrete time values
+    model_poly = polynomial_with_coeff(time_values) ##Creates the model polynomial at discrete times
+
+    '''
+    plt.figure()
+    plt.xlabel('Time Since B Maximum')
+    plt.ylabel('Magnitude')
+    plt.title(perm[i][0]+'-'+perm[i][1])  ##Titles graphs as first colour band minus second colour band
+    plt.plot(time_values,model_poly,'-',label='2004eo')
+    plt.legend(loc=1,fontsize=11)
+    '''
+
+    data_opt = dict()
+    data_opt.update(data_OPT1)
+    data_opt.update(data_OPT2)
+    
+    fig, ax = plt.subplots()
+    
+    for sn in data_opt.keys():
+        print sn
+        s1 = snpy.get_sn('/home/es2y14/snpyfiles/snpyfits/optical_1/SN'+sn)  ##Load SNe
+        a1 = data_opt[sn]['jd']-s1.Tmax ## Get relative to max light (B)
+        colour_SN = data_opt[sn][band_1] - data_opt[sn][band_2] ## Calculate colours
+    
+        ## DUST!
+        #EBV_host1 = s1.parameters['EBVhost'] #define the EBV of the host galaxy
+        #EBV_mw1 = s1.EBVgal #define the EBV of the galaxy
+        #A_v1 = s1.Rv_gal*(EBV_host1+EBV_mw1) #define Av
+        
+        ## CALCULATE EXTINCTION
+        #extinct1 = A_v1*(1.559308705173683-1.3426758734183681)
+        #extinct1 = 0.0
+        extinct1 = (calculate_extinction(band1 = band_1, band2 = band_2, R_v = 3.1, sn = sn))
+        #colour_SN = colour_SN - extinct1
+        colour_SN = colour_SN + extinct1
+
+        ## Get fit to data - possibly use this later
+        SN_fits = polynomial_with_coeff(a1) ##p is the 04eo model, sample at epochs of current SNe
+        
+
+    
+        ##SOME CODE TO BIN OUR DATA    
+        #bins
+        binsize = 5
+        bins = np.arange(-20, 30, binsize) #x-axis
+        med_col = np.zeros(len(bins)) #y-axis
+        
+        ##Sort through data
+
+    	for b in bins:
+            w = np.where(bins == b)
+            #print b, b+binsize
+            #print np.where(a1[np.where(a1 > b)] < b+binsize)
+            #print(a1[np.where(a1 > b)])[np.where(a1[np.where(a1 > b)] < b+binsize)]
+            #print np.median((a1[np.where(a1 > b)])[np.where(a1[np.where(a1 > b)] < b+binsize)])
+            #STUPID#med_col[w] = np.median((a1[np.where(a1 > b)])[np.where(a1[np.where(a1 > b)] < b+binsize)])
+            med_col[w] = np.median((colour_SN[np.where(a1 > b)])[np.where(a1[np.where(a1 > b)] < b+binsize)])
+        print med_col
+        print 'med_col_'+band_1+band_2
+    	data_opt[sn]['med_col_'+band_1+band_2] = med_col
+        data_opt[sn]['dm15'] = s1.dm15
+            
+        ax.plot(data_opt[sn]['dm15'], med_col[4],'x',label=sn)
+
+    ax.legend(loc=1,fontsize=9)
+    ax.set_title(perm[i][0]+'-'+perm[i][1]) #title the first graph
+    ax.set_xlabel('dm15') #x-axis defined
+    ax.set_ylabel('Median colour') #y-axis defined
+fig.savefig('/home/es2y14/Colours/auto/positive/'+band_1+'-'+band_2+'.png', dpi=400)
+    #fig.savefig('/home/es2y14/Colours/auto/op1/'+band_1+'-'+band_2+'.png', dpi=400)
+plt.close('all')
+#plt.show()
